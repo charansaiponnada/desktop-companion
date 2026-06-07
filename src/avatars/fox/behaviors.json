@@ -1,0 +1,42 @@
+{
+  "id": "fox",
+  "name": "Fox",
+  "description": "Curious, alert, energetic. Ears perk on events. Head-tilts. Pays close attention.",
+  "idleThresholdMins": 7,
+  "overrides": {
+    "mouse_fast": { "from": ["idle", "sleep"], "to": "hunting",   "duration": 2500 },
+    "key_burst":  { "from": ["typing"],        "to": "surprised", "duration": 1500 }
+  },
+  "speechFrequency": "medium",
+  "silenceChance": 0.15,
+  "personality": {
+    "idle": [
+      "hey {name}.",
+      "*ears perk*",
+      "watcha doing?",
+      "*head tilt*",
+      "all good?"
+    ],
+    "task_complete": [
+      "yes! you did it, {name}!",
+      "nailed it!",
+      "nice work!",
+      "that's the one."
+    ],
+    "typing_long": [
+      "{mins} minutes of typing. going strong?",
+      "hands ok, {name}?",
+      "deep focus. i see you."
+    ],
+    "water": [
+      "water break?",
+      "have you had water, {name}?",
+      "hydration check!"
+    ],
+    "pomodoro_break": [
+      "focus block done! break time.",
+      "25 mins. well done, {name}. rest up.",
+      "step away, stretch a bit."
+    ]
+  }
+}

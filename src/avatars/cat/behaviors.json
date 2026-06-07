@@ -1,0 +1,42 @@
+{
+  "id": "cat",
+  "name": "Cat",
+  "description": "Calm, slightly aloof. Knocks things off. Slow blinks. Ignores you sometimes.",
+  "idleThresholdMins": 5,
+  "overrides": {
+    "mouse_fast": { "from": ["idle", "sleep", "typing"], "to": "hunting", "duration": 4000 },
+    "pet":        { "from": ["*"],                       "to": "wave",    "duration": 3000 }
+  },
+  "speechFrequency": "low",
+  "silenceChance": 0.4,
+  "personality": {
+    "idle": [
+      "...",
+      "*slow blink*",
+      "hmm.",
+      "still here, {name}.",
+      "*tail flick*"
+    ],
+    "task_complete": [
+      "about time.",
+      "good.",
+      "knew you could.",
+      "*slow blink*"
+    ],
+    "typing_long": [
+      "still typing?",
+      "{mins} minutes. impressive.",
+      "*watches paws*"
+    ],
+    "water": [
+      "water. now.",
+      "you forgot again.",
+      "*stares*"
+    ],
+    "pomodoro_break": [
+      "break.",
+      "stop. rest.",
+      "done. go stretch."
+    ]
+  }
+}
