@@ -20,6 +20,10 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
 </p>
 
+<p align="center">
+  <img src="screenshots/states.png" width="700" alt="mochi in various states" />
+</p>
+
 ---
 
 ## What is mochi?
@@ -51,7 +55,9 @@ Choose between a **cat** (calm, slightly aloof) or a **fox** (curious, energetic
 | **macOS** | `.dmg` from [Releases](https://github.com/charansaiponnada/desktop-companion/releases) |
 | **Linux** | `.AppImage` or `.deb` from [Releases](https://github.com/charansaiponnada/desktop-companion/releases) |
 
-> No releases yet? Build from source below.
+⬇️ **[Download v0.1.0](https://github.com/charansaiponnada/desktop-companion/releases/tag/v0.1.0)** — the first stable release is live.
+
+Or build from source below.
 
 ## Quick start (from source)
 
