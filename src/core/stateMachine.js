@@ -15,6 +15,10 @@ export const STATES = {
   WAVE:      'wave',
   THINK:     'think',
   STRETCH:   'stretch',
+  OVERHEAT:  'overheat',
+  JUMP:      'jump',
+  PURR:      'purr',
+  PAPER:     'paper',
 };
 
 export const EVENTS = {
@@ -31,6 +35,9 @@ export const EVENTS = {
   AI_DONE:       'ai_done',
   POMODORO_END:  'pomodoro_end',
   PET:           'pet',
+  SCROLL:        'scroll',
+  OVERHEAT:      'overheat',
+  COOLDOWN:      'cooldown',
 };
 
 const DEFAULT_TRANSITIONS = {
@@ -41,11 +48,14 @@ const DEFAULT_TRANSITIONS = {
   wake:          { from: ['sleep'],           to: 'idle',     duration: 1000 },
   drag_start:    { from: '*',                 to: 'drag',     duration: null },
   drag_end:      { from: ['drag'],            to: 'idle',     duration: 1000 },
-  task_complete: { from: '*',                 to: 'happy',    duration: 2500 },
+  task_complete: { from: '*',                 to: 'jump',     duration: 2000 },
   ai_thinking:   { from: '*',                 to: 'think',    duration: null },
-  ai_done:       { from: ['think'],           to: 'happy',    duration: 2000 },
-  pet:           { from: '*',                 to: 'wave',     duration: 2000 },
+  ai_done:       { from: ['think'],           to: 'jump',     duration: 2000 },
+  pet:           { from: '*',                 to: 'purr',     duration: 3000 },
   pomodoro_end:  { from: '*',                 to: 'stretch',  duration: 4000 },
+  scroll:        { from: '*',                 to: 'paper',    duration: 1500 },
+  overheat:      { from: ['typing'],          to: 'overheat', duration: 2500 },
+  cooldown:      { from: ['overheat'],        to: 'idle',     duration: 1000 },
 };
 
 export class StateMachine {
