@@ -6,11 +6,12 @@ import { brain, checkOllama } from '../ai/brain.js';
 import { memory } from '../memory/store.js';
 import catBehaviors from '../avatars/cat/behaviors.json';
 import foxBehaviors from '../avatars/fox/behaviors.json';
-import { drawMochi, createBlinkManager } from './mochi.js';
+import { drawMochi, createBlinkManager, isMouseOverHead } from './mochi.js';
 
 const AVATARS = { cat: catBehaviors, fox: foxBehaviors };
 const CANVAS_W = 200;
 const CANVAS_H = 200;
+const CANVAS_SCALE = 2;
 const P = 3;
 
 const MOCHI_STATE_MAP = {
@@ -117,6 +118,8 @@ export default function Companion({ avatarId = 'cat', colors }) {
   const colorsRef = useRef(colors);
   stateRef.current  = state;
   colorsRef.current = colors;
+  const headPetRef  = useRef(0);
+  const petCooldown = useRef(0);
 
   useEffect(() => {
     memory.getPref('name', 'you').then(n => setName(n));
@@ -150,7 +153,24 @@ export default function Companion({ avatarId = 'cat', colors }) {
     if (!canvas) return;
     canvas.addEventListener('mousemove', e => {
       const rect = canvas.getBoundingClientRect();
-      eyeRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      eyeRef.current = { x: mx, y: my };
+      const now = Date.now();
+      if (now - petCooldown.current < 3000) return;
+      const cur = stateRef.current;
+      if (cur === 'purr' || cur === 'sleep') return;
+      if (isMouseOverHead(mx, my, CANVAS_W, CANVAS_H, CANVAS_SCALE, cur)) {
+        if (!headPetRef.current) {
+          headPetRef.current = now;
+        } else if (now - headPetRef.current > 400) {
+          smRef.current?.dispatch('pet');
+          petCooldown.current = now;
+          headPetRef.current = 0;
+        }
+      } else {
+        headPetRef.current = 0;
+      }
     });
     canvas.addEventListener('dblclick', () => smRef.current?.dispatch('pet'));
     canvas.addEventListener('contextmenu', e => {
