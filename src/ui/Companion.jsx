@@ -153,6 +153,26 @@ export default function Companion({ avatarId = 'cat', colors }) {
       eyeRef.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     });
     canvas.addEventListener('dblclick', () => smRef.current?.dispatch('pet'));
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      smRef.current?.dispatch('pet');
+    });
+  }, []);
+
+  useEffect(() => {
+    function handleKey(e) {
+      const sm = smRef.current;
+      if (!sm) return;
+      switch (e.key.toLowerCase()) {
+        case 'p': sm.dispatch('pet'); break;
+        case 'w': sm.dispatch('pomodoro_end'); break;
+        case 'r': sm.dispatch('task_complete'); break;
+        case 't': sm.dispatch('ai_thinking'); setTimeout(() => sm.dispatch('ai_done'), 2000); break;
+        case ' ': sm.dispatch('pet'); e.preventDefault(); break;
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
   }, []);
 
   useEffect(() => {
@@ -291,6 +311,32 @@ export default function Companion({ avatarId = 'cat', colors }) {
         height={CANVAS_H}
         style={{ cursor: 'pointer' }}
       />
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 4, marginTop: 2 }}>
+        <button
+          onClick={() => smRef.current?.dispatch('pet')}
+          style={{
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+            color: '#f0ede8', borderRadius: 6, padding: '2px 8px', cursor: 'pointer',
+            fontSize: 9, fontFamily: 'DM Sans, sans-serif', letterSpacing: '0.1em',
+            lineHeight: '18px',
+          }}
+          title="Pet (P key, double-click, or right-click)"
+        >
+          pet
+        </button>
+        <button
+          onClick={() => smRef.current?.dispatch('task_complete')}
+          style={{
+            background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)',
+            color: '#f0ede8', borderRadius: 6, padding: '2px 8px', cursor: 'pointer',
+            fontSize: 9, fontFamily: 'DM Sans, sans-serif', letterSpacing: '0.1em',
+            lineHeight: '18px',
+          }}
+          title="Celebrate (R key)"
+        >
+          woo
+        </button>
+      </div>
     </div>
   );
 }

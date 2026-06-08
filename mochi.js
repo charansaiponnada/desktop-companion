@@ -1,30 +1,29 @@
 /**
  * Mochi — desktop companion cat sprite renderer
  * All drawing is pure Canvas 2D — no images, no external assets
- * Drop-in replacement for the previous pixel renderer in Companion.jsx
  *
  * Usage:
  *   import { drawMochi } from './mochi.js';
  *   // in your rAF loop:
- *   drawMochi(ctx, { state, frame, eyeTarget: {x, y}, scale: 1 });
+ *   drawMochi(ctx, { state, frame, eyeTarget: {x, y}, scale: 1, blink: 0, colors });
  *
- * States: idle | walk | run | sleep | think | typing | happy | excited | surprised | drag | wag
+ * States: idle | walk | run | sleep | think | typing | happy | excited | surprised
+ *         | drag | wag | stretch | overheat | jump | purr | paper
  */
 
-// ─── palette ────────────────────────────────────────────────────────────────
 const C = {
-  cream:      '#F5ECD7',   // base fur
-  creamDark:  '#EDD9B4',   // fur shadow
-  creamDeep:  '#D4B896',   // deep shadow / inner ear
-  orange:     '#E8834A',   // ear tips, tail tip, accent
-  orangeLight:'#F0A070',   // warm highlight
-  orangeGlow: '#FFCFA0',   // magical glow tint
+  cream:      '#F5ECD7',
+  creamDark:  '#EDD9B4',
+  creamDeep:  '#D4B896',
+  orange:     '#E8834A',
+  orangeLight:'#F0A070',
+  orangeGlow: '#FFCFA0',
   eyeWhite:   '#FEFEFE',
-  eyeBlue:    '#5BB8F5',   // iris
-  eyeBlueDark:'#2E86C1',   // iris shadow
-  pupil:      '#1A1A2E',   // deep pupil
-  pupilShine: '#FFFFFF',   // catchlight
-  nose:       '#F48FB1',   // pink nose
+  eyeBlue:    '#5BB8F5',
+  eyeBlueDark:'#2E86C1',
+  pupil:      '#1A1A2E',
+  pupilShine: '#FFFFFF',
+  nose:       '#F48FB1',
   noseDark:   '#E57399',
   mouth:      '#C97B9A',
   whisker:    'rgba(180,160,140,0.7)',
@@ -37,422 +36,342 @@ const C = {
   thinkBubble:'rgba(255,255,255,0.88)',
   sparkle:    '#FFE066',
   sparkle2:   '#FF9FD0',
+  steam:      'rgba(220,230,255,0.35)',
+  steamBright:'rgba(240,245,255,0.5)',
+  heart:      '#FF6B8A',
+  heartLight: '#FF9FB5',
+  paper:      '#F5F0E8',
+  paperLine:  '#D0C8B8',
 };
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
 function ease(t) { return t < 0.5 ? 2*t*t : -1+(4-2*t)*t; }
 function lerp(a, b, t) { return a + (b - a) * t; }
-function sin(frame, speed=1, amp=1, offset=0) {
-  return Math.sin(frame * speed + offset) * amp;
-}
-function cos(frame, speed=1, amp=1, offset=0) {
-  return Math.cos(frame * speed + offset) * amp;
-}
-
-// ─── sub-drawers ─────────────────────────────────────────────────────────────
+function sin(f, s=1, a=1, o=0) { return Math.sin(f*s+o)*a; }
 
 function drawGlow(ctx, cx, cy, r, color) {
-  const g = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r);
+  const g = ctx.createRadialGradient(cx, cy, r*.2, cx, cy, r);
   g.addColorStop(0, color);
   g.addColorStop(1, 'rgba(255,180,100,0)');
   ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
 }
 
 function drawShadow(ctx, cx, cy, rx, ry) {
   ctx.save();
   ctx.fillStyle = C.shadow;
+  ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawBody(ctx, cx, cy, sx=1, sy=1, colors) {
+  const c = { ...C, ...colors };
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(sx, sy);
+  drawGlow(ctx, 0, 0, 30, c.glow);
+  ctx.fillStyle = c.cream;
+  ctx.beginPath(); ctx.ellipse(0, 2, 22, 20, 0, 0, Math.PI*2); ctx.fill();
+  const belly = ctx.createRadialGradient(0, 4, 2, 0, 4, 16);
+  belly.addColorStop(0, 'rgba(255,255,255,0.5)');
+  belly.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = belly;
+  ctx.beginPath(); ctx.ellipse(0, 5, 14, 12, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = c.creamDark;
+  ctx.beginPath(); ctx.ellipse(0, 8, 18, 12, 0, Math.PI*.1, Math.PI*.9); ctx.fill();
+  ctx.restore();
+}
+
+function drawEar(ctx, cx, cy, flip=1, perk=0, colors) {
+  const c = { ...C, ...colors };
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(flip, 1);
+  const lift = perk * 3;
+  ctx.fillStyle = c.cream;
+  ctx.beginPath(); ctx.moveTo(0, 0);
+  ctx.bezierCurveTo(-4, -14-lift, 8, -18-lift, 12, -8);
+  ctx.bezierCurveTo(8, -4, 4, -2, 0, 0); ctx.fill();
+  ctx.fillStyle = c.orange; ctx.globalAlpha = 0.7;
+  ctx.beginPath(); ctx.moveTo(1, -1);
+  ctx.bezierCurveTo(-1, -10-lift, 5, -13-lift, 9, -7);
+  ctx.bezierCurveTo(7, -4, 3, -2, 1, -1); ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+function drawEyes(ctx, cx, cy, et, blink, state, frame, colors) {
+  const c = { ...C, ...colors };
+  [{x:cx-8,y:cy},{x:cx+8,y:cy}].forEach(eye=>{
+    ctx.save(); ctx.translate(eye.x, eye.y);
+    const bH = blink > 0 ? lerp(10, 1, blink) : 10;
+    ctx.fillStyle = c.eyeWhite;
+    ctx.beginPath(); ctx.ellipse(0, 0, 9, bH, 0, 0, Math.PI*2); ctx.fill();
+    if (blink < 0.8) {
+      const dx = et ? (et.x - eye.x) : 0, dy = et ? (et.y - eye.y) : 0;
+      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+      const px = (dx/dist) * Math.min(dist*.04, 2.5), py = (dy/dist) * Math.min(dist*.04, 2.5);
+      const ig = ctx.createRadialGradient(px-1, py-1, .5, px, py, 6);
+      ig.addColorStop(0, c.eyeBlue); ig.addColorStop(1, c.eyeBlueDark);
+      ctx.fillStyle = ig;
+      ctx.beginPath(); ctx.ellipse(px, py, 6, Math.min(6, bH-1), 0, 0, Math.PI*2); ctx.fill();
+      const pupilR = (state==='excited'||state==='happy') ? 4.5 : 3.5;
+      ctx.fillStyle = c.pupil;
+      ctx.beginPath(); ctx.ellipse(px, py, pupilR, Math.min(pupilR, bH-2), 0, 0, Math.PI*2); ctx.fill();
+      if (state === 'excited') {
+        const sa = (Math.sin(frame*.15)+1)*.5;
+        ctx.strokeStyle = c.sparkle; ctx.globalAlpha = sa*.8; ctx.lineWidth = .8;
+        ctx.beginPath(); ctx.arc(0, 0, 10.5, 0, Math.PI*2); ctx.stroke(); ctx.globalAlpha = 1;
+      }
+      ctx.fillStyle = c.pupilShine;
+      ctx.beginPath(); ctx.arc(px-1.5, py-2, 1.8, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(px+1.5, py+1, .8, 0, Math.PI*2); ctx.fill();
+    }
+    if (blink > 0.3) {
+      ctx.fillStyle = c.cream;
+      ctx.beginPath(); ctx.ellipse(0, -bH*(1-blink), 9, bH*blink, 0, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  });
+}
+
+function drawNose(ctx, cx, cy) {
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.fillStyle = C.nose;
+  ctx.beginPath(); ctx.ellipse(0, 0, 3, 2.2, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath(); ctx.arc(-.8, -.6, .9, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawMouth(ctx, cx, cy, happy=false) {
+  ctx.save(); ctx.translate(cx, cy);
+  ctx.strokeStyle = C.mouth; ctx.lineWidth = 1.2; ctx.lineCap = 'round';
+  if (happy) {
+    ctx.beginPath(); ctx.moveTo(-4, 0); ctx.quadraticCurveTo(-2, 4, 0, 4);
+    ctx.quadraticCurveTo(2, 4, 4, 0); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.moveTo(-3, 0); ctx.quadraticCurveTo(0, 2.5, 3, 0); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawWhiskers(ctx, cx, cy, twitch=0) {
+  ctx.save(); ctx.strokeStyle = C.whisker; ctx.lineWidth = .8; ctx.lineCap = 'round';
+  const tw = twitch * 1.5;
+  [[cx-6, cy-1+tw, cx-22, cy-3+tw],[cx-6, cy+1, cx-22, cy+2],[cx-6, cy+3-tw, cx-22, cy+6-tw],
+   [cx+6, cy-1+tw, cx+22, cy-3+tw],[cx+6, cy+1, cx+22, cy+2],[cx+6, cy+3-tw, cx+22, cy+6-tw]]
+  .forEach(([x1,y1,x2,y2])=>{ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();});
+  ctx.restore();
+}
+
+function drawTail(ctx, cx, cy, angle=0, wag=0, colors) {
+  const c = { ...C, ...colors };
+  ctx.save(); ctx.translate(cx, cy);
+  const cp1x = 10+wag*8, cp1y = -8, cp2x = 22+wag*10, cp2y = -20+angle*10, ex = 18+wag*6, ey = -28+angle*8;
+  ctx.strokeStyle = c.cream; ctx.lineWidth = 8; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, ex, ey); ctx.stroke();
+  ctx.strokeStyle = c.orange; ctx.lineWidth = 7; ctx.globalAlpha = .9;
+  ctx.beginPath(); ctx.moveTo(ex-2, ey+2); ctx.bezierCurveTo(ex, ey-2, ex+2, ey-6, ex, ey-8); ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = c.orangeLight;
+  ctx.beginPath(); ctx.arc(ex, ey-5, 5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = c.orangeGlow;
+  ctx.beginPath(); ctx.arc(ex-1, ey-6, 2.5, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawPaws(ctx, cx, cy, ly=0, ry=0, bounce=0) {
+  [{x:cx-10,y:cy+ly+bounce},{x:cx+10,y:cy+ry+bounce}].forEach(p=>{
+    ctx.fillStyle = C.creamDark;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, 7, 5, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = C.cream;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y-1, 6.5, 4.5, 0, 0, Math.PI*2); ctx.fill();
+    [-2.5,0,2.5].forEach(bx=>{
+      ctx.fillStyle = C.pawPad;
+      ctx.beginPath(); ctx.arc(p.x+bx, p.y+1.5, 1.3, 0, Math.PI*2); ctx.fill();
+    });
+    ctx.fillStyle = C.pawPad;
+    ctx.beginPath(); ctx.arc(p.x, p.y-.5, 2, 0, Math.PI*2); ctx.fill();
+  });
+}
+
+function drawZzz(ctx, cx, cy, frame) {
+  ['z','z','Z'].forEach((z,i)=>{
+    const age = ((frame*.02+i*.33)%1), rise = age*20, alpha = age<.7 ? age/.7 : (1-age)/.3;
+    ctx.globalAlpha = alpha*.8; ctx.fillStyle = C.zzzColor;
+    ctx.font = `bold ${8+i*3}px sans-serif`;
+    ctx.fillText(z, cx+14+i*4-rise*.3, cy-10-rise);
+  }); ctx.globalAlpha = 1;
+}
+
+function drawThinkBubble(ctx, cx, cy, frame) {
+  const bob = Math.sin(frame*.08)*2;
+  [[cx+20,cy-18,2.5],[cx+26,cy-26,3.5],[cx+30,cy-36,5]].forEach(([bx,by,br],i)=>{
+    ctx.globalAlpha = .5+i*.15; ctx.fillStyle = C.thinkBubble;
+    ctx.beginPath(); ctx.arc(bx, by+bob*(i*.3), br, 0, Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha = .9; ctx.fillStyle = C.thinkBubble;
+  ctx.beginPath(); ctx.arc(cx+32, cy-44+bob, 12, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = C.eyeBlueDark; ctx.globalAlpha = .6+Math.sin(frame*.1)*.2;
+  for (let i=0;i<3;i++){ctx.beginPath();ctx.arc(cx+24+i*5,cy-44+bob,1.8,0,Math.PI*2);ctx.fill();}
+  ctx.globalAlpha = 1;
+}
+
+function drawSparkles(ctx, cx, cy, frame) {
+  [{ox:-18,oy:-22,phase:0},{ox:20,oy:-18,phase:.5},{ox:-12,oy:-32,phase:.25},{ox:14,oy:-30,phase:.75}]
+  .forEach(s=>{
+    const a = (Math.sin(frame*.12+s.phase*Math.PI*2)+1)*.5, size = 2+a*3;
+    ctx.globalAlpha = a*.9; ctx.fillStyle = s.phase<.5 ? C.sparkle : C.sparkle2;
+    ctx.save(); ctx.translate(cx+s.ox, cy+s.oy); ctx.rotate(frame*.03+s.phase);
+    ctx.beginPath();
+    for (let p=0;p<4;p++){const angle=(p/4)*Math.PI*2,r=p%2===0?size:size*.3;ctx.lineTo(Math.cos(angle)*r,Math.sin(angle)*r);}
+    ctx.closePath(); ctx.fill(); ctx.restore();
+  }); ctx.globalAlpha = 1;
+}
+
+function drawSteam(ctx, cx, cy, frame) {
+  for (let i = 0; i < 5; i++) {
+    const age = ((frame * 0.03 + i * 0.2) % 1);
+    const rise = age * 28;
+    const drift = Math.sin(age * Math.PI * 2 + i) * 6;
+    const alpha = age < 0.6 ? age / 0.6 : (1 - age) / 0.4;
+    const r = 4 + age * 6;
+    ctx.globalAlpha = alpha * 0.4;
+    ctx.fillStyle = C.steam;
+    ctx.beginPath();
+    ctx.arc(cx + drift, cy - 14 - rise, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawHearts(ctx, cx, cy, frame) {
+  for (let i = 0; i < 3; i++) {
+    const age = ((frame * 0.02 + i * 0.33) % 1);
+    const rise = age * 18;
+    const drift = Math.sin(age * Math.PI * 2 + i * 1.5) * 5;
+    const alpha = age < 0.5 ? age / 0.5 : (1 - age) / 0.5;
+    const s = 2 + age * 3;
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.fillStyle = i % 2 === 0 ? C.heart : C.heartLight;
+    ctx.save();
+    ctx.translate(cx - 14 + drift + i * 3, cy - 10 - rise);
+    ctx.beginPath();
+    ctx.moveTo(0, s * 0.3);
+    ctx.bezierCurveTo(-s * 0.5, -s * 0.3, -s, s * 0.1, 0, s);
+    ctx.bezierCurveTo(s, s * 0.1, s * 0.5, -s * 0.3, 0, s * 0.3);
+    ctx.fill();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPaper(ctx, cx, cy, frame) {
+  const progress = Math.min((frame % 120) / 120, 1);
+  const unroll = progress * 30;
+  ctx.save();
+  ctx.fillStyle = C.paper;
   ctx.beginPath();
-  ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  ctx.roundRect(cx - 14, cy + 12, 28, 4 + unroll, 2);
+  ctx.fill();
+  ctx.strokeStyle = C.paperLine;
+  ctx.lineWidth = 0.5;
+  for (let i = 0; i < 3; i++) {
+    const ly = cy + 14 + i * ((4 + unroll) / 3);
+    ctx.beginPath();
+    ctx.moveTo(cx - 10, ly);
+    ctx.lineTo(cx + 10, ly);
+    ctx.stroke();
+  }
+  ctx.fillStyle = C.creamDark;
+  ctx.beginPath();
+  ctx.ellipse(cx - 14, cy + 14 + unroll, 3, 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(cx + 14, cy + 14 + unroll, 3, 2, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
 
-function drawBody(ctx, cx, cy, scaleX=1, scaleY=1) {
+function drawBodyStretched(ctx, cx, cy, frame) {
+  const t = (frame % 90) / 90;
+  let sy;
+  if (t < 0.3) sy = lerp(1, 1.35, t / 0.3);
+  else if (t < 0.6) sy = lerp(1.35, 1.4, (t - 0.3) / 0.3);
+  else sy = lerp(1.4, 1, (t - 0.6) / 0.4);
+  const earLift = (sy - 1) * 15;
   ctx.save();
   ctx.translate(cx, cy);
-  ctx.scale(scaleX, scaleY);
-
-  // body glow aura
+  ctx.scale(0.95, sy);
   drawGlow(ctx, 0, 0, 30, C.glow);
-
-  // main body — rounded oval
   ctx.fillStyle = C.cream;
   ctx.beginPath();
-  ctx.ellipse(0, 2, 22, 20, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 2 + (sy - 1) * 5, 22, 20, 0, 0, Math.PI * 2);
   ctx.fill();
-
-  // belly highlight
   const belly = ctx.createRadialGradient(0, 4, 2, 0, 4, 16);
   belly.addColorStop(0, 'rgba(255,255,255,0.5)');
   belly.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = belly;
   ctx.beginPath();
-  ctx.ellipse(0, 5, 14, 12, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 5 + (sy - 1) * 4, 14, 12, 0, 0, Math.PI * 2);
   ctx.fill();
-
-  // body shadow bottom
-  ctx.fillStyle = C.creamDark;
-  ctx.beginPath();
-  ctx.ellipse(0, 8, 18, 12, 0, Math.PI * 0.1, Math.PI * 0.9);
-  ctx.fill();
-
   ctx.restore();
-}
 
-function drawEar(ctx, cx, cy, flip=1, perk=0) {
   ctx.save();
-  ctx.translate(cx, cy);
-  ctx.scale(flip, 1);
-
-  const lift = perk * 3;
-
-  // outer ear
+  ctx.translate(cx - 12, cy - 16 - earLift);
+  const lift = earLift * 0.3;
   ctx.fillStyle = C.cream;
   ctx.beginPath();
   ctx.moveTo(0, 0);
   ctx.bezierCurveTo(-4, -14 - lift, 8, -18 - lift, 12, -8);
   ctx.bezierCurveTo(8, -4, 4, -2, 0, 0);
   ctx.fill();
-
-  // inner ear
-  ctx.fillStyle = C.orange;
-  ctx.globalAlpha = 0.7;
+  ctx.fillStyle = C.orange; ctx.globalAlpha = 0.7;
   ctx.beginPath();
   ctx.moveTo(1, -1);
   ctx.bezierCurveTo(-1, -10 - lift, 5, -13 - lift, 9, -7);
   ctx.bezierCurveTo(7, -4, 3, -2, 1, -1);
   ctx.fill();
   ctx.globalAlpha = 1;
-
   ctx.restore();
-}
 
-function drawEyes(ctx, cx, cy, eyeTarget, blink, state, frame) {
-  const eyeSpacing = 8;
-  const eyes = [
-    { x: cx - eyeSpacing, y: cy, side: -1 },
-    { x: cx + eyeSpacing, y: cy, side: 1  },
-  ];
-
-  eyes.forEach(eye => {
-    ctx.save();
-    ctx.translate(eye.x, eye.y);
-
-    const blinkH = blink > 0 ? lerp(10, 1, blink) : 10;
-    const blinkW = 9;
-
-    // eye white
-    ctx.fillStyle = C.eyeWhite;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, blinkW, blinkH, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (blink < 0.8) {
-      // compute pupil tracking direction
-      const dx = eyeTarget ? (eyeTarget.x - eye.x) : 0;
-      const dy = eyeTarget ? (eyeTarget.y - eye.y) : 0;
-      const dist = Math.sqrt(dx*dx + dy*dy) || 1;
-      const maxPupilOffset = 2.5;
-      const px = (dx / dist) * Math.min(dist * 0.04, maxPupilOffset);
-      const py = (dy / dist) * Math.min(dist * 0.04, maxPupilOffset);
-
-      // iris
-      const irisGrad = ctx.createRadialGradient(px - 1, py - 1, 0.5, px, py, 6);
-      irisGrad.addColorStop(0, C.eyeBlue);
-      irisGrad.addColorStop(1, C.eyeBlueDark);
-      ctx.fillStyle = irisGrad;
-      ctx.beginPath();
-      ctx.ellipse(px, py, 6, Math.min(6, blinkH - 1), 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // pupil
-      ctx.fillStyle = C.pupil;
-      ctx.beginPath();
-      ctx.ellipse(px, py, 3.5, Math.min(3.5, blinkH - 2), 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      // sparkle / excited dilation
-      if (state === 'excited' || state === 'happy') {
-        ctx.fillStyle = C.pupil;
-        ctx.beginPath();
-        ctx.ellipse(px, py, 4.5, Math.min(4.5, blinkH - 1), 0, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // catchlight
-      ctx.fillStyle = C.pupilShine;
-      ctx.beginPath();
-      ctx.arc(px - 1.5, py - 2, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(px + 1.5, py + 1, 0.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      // eye sparkle ring for excited
-      if (state === 'excited') {
-        const sparkAlpha = (Math.sin(frame * 0.15) + 1) * 0.5;
-        ctx.strokeStyle = C.sparkle;
-        ctx.globalAlpha = sparkAlpha * 0.8;
-        ctx.lineWidth = 0.8;
-        ctx.beginPath();
-        ctx.arc(0, 0, blinkW + 1.5, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
-    }
-
-    // eyelid on blink
-    if (blink > 0.3) {
-      ctx.fillStyle = C.cream;
-      ctx.beginPath();
-      ctx.ellipse(0, -blinkH * (1 - blink), blinkW, blinkH * blink, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    ctx.restore();
-  });
-}
-
-function drawNose(ctx, cx, cy) {
   ctx.save();
-  ctx.translate(cx, cy);
-
-  // nose
-  ctx.fillStyle = C.nose;
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 3, 2.2, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // nose shine
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.beginPath();
-  ctx.arc(-0.8, -0.6, 0.9, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.restore();
-}
-
-function drawMouth(ctx, cx, cy, happy=false) {
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.strokeStyle = C.mouth;
-  ctx.lineWidth = 1.2;
-  ctx.lineCap = 'round';
-
-  if (happy) {
-    // happy curve
-    ctx.beginPath();
-    ctx.moveTo(-4, 0);
-    ctx.quadraticCurveTo(-2, 4, 0, 4);
-    ctx.quadraticCurveTo(2, 4, 4, 0);
-    ctx.stroke();
-  } else {
-    // neutral small curve
-    ctx.beginPath();
-    ctx.moveTo(-3, 0);
-    ctx.quadraticCurveTo(0, 2.5, 3, 0);
-    ctx.stroke();
-  }
-
-  ctx.restore();
-}
-
-function drawWhiskers(ctx, cx, cy, twitch=0) {
-  ctx.save();
-  ctx.strokeStyle = C.whisker;
-  ctx.lineWidth = 0.8;
-  ctx.lineCap = 'round';
-
-  const tw = twitch * 1.5;
-
-  // left whiskers
-  [[cx-6, cy-1+tw, cx-22, cy-3+tw],
-   [cx-6, cy+1,    cx-22, cy+2],
-   [cx-6, cy+3-tw, cx-22, cy+6-tw]].forEach(([x1,y1,x2,y2]) => {
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-  });
-
-  // right whiskers
-  [[cx+6, cy-1+tw, cx+22, cy-3+tw],
-   [cx+6, cy+1,    cx+22, cy+2],
-   [cx+6, cy+3-tw, cx+22, cy+6-tw]].forEach(([x1,y1,x2,y2]) => {
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-  });
-
-  ctx.restore();
-}
-
-function drawTail(ctx, cx, cy, angle=0, wagAmt=0) {
-  ctx.save();
-  ctx.translate(cx, cy);
-
-  const wag = wagAmt;
-  const cp1x = 10 + wag * 8;
-  const cp1y = -8;
-  const cp2x = 22 + wag * 10;
-  const cp2y = -20 + angle * 10;
-  const ex   = 18 + wag * 6;
-  const ey   = -28 + angle * 8;
-
-  // tail base thick → thin
-  ctx.strokeStyle = C.cream;
-  ctx.lineWidth = 8;
-  ctx.lineCap = 'round';
+  ctx.translate(cx + 12, cy - 16 - earLift);
+  ctx.scale(-1, 1);
+  const lift2 = earLift * 0.3;
+  ctx.fillStyle = C.cream;
   ctx.beginPath();
   ctx.moveTo(0, 0);
-  ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, ex, ey);
-  ctx.stroke();
-
-  // orange tip
-  ctx.strokeStyle = C.orange;
-  ctx.lineWidth = 7;
-  ctx.globalAlpha = 0.9;
+  ctx.bezierCurveTo(-4, -14 - lift2, 8, -18 - lift2, 12, -8);
+  ctx.bezierCurveTo(8, -4, 4, -2, 0, 0);
+  ctx.fill();
+  ctx.fillStyle = C.orange; ctx.globalAlpha = 0.7;
   ctx.beginPath();
-  ctx.moveTo(ex - 2, ey + 2);
-  ctx.bezierCurveTo(ex, ey - 2, ex + 2, ey - 6, ex, ey - 8);
-  ctx.stroke();
+  ctx.moveTo(1, -1);
+  ctx.bezierCurveTo(-1, -10 - lift2, 5, -13 - lift2, 9, -7);
+  ctx.bezierCurveTo(7, -4, 3, -2, 1, -1);
+  ctx.fill();
   ctx.globalAlpha = 1;
-
-  // fluffy tip highlight
-  ctx.fillStyle = C.orangeLight;
-  ctx.beginPath();
-  ctx.arc(ex, ey - 5, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = C.orangeGlow;
-  ctx.beginPath();
-  ctx.arc(ex - 1, ey - 6, 2.5, 0, Math.PI * 2);
-  ctx.fill();
-
   ctx.restore();
 }
 
-function drawPaws(ctx, cx, cy, leftY=0, rightY=0, bounce=0) {
-  // front paws
-  const paws = [
-    { x: cx - 10, y: cy + leftY + bounce },
-    { x: cx + 10, y: cy + rightY + bounce },
-  ];
-
-  paws.forEach(p => {
-    // paw body
+function drawPawsUp(ctx, cx, cy, frame) {
+  const t = (frame % 90) / 90;
+  let pawY;
+  if (t < 0.3) pawY = lerp(10, -8, t / 0.3);
+  else if (t < 0.6) pawY = lerp(-8, -12, (t - 0.3) / 0.3);
+  else pawY = lerp(-12, 10, (t - 0.6) / 0.4);
+  [{x:cx-10,y:cy+pawY},{x:cx+10,y:cy+pawY}].forEach(p=>{
     ctx.fillStyle = C.creamDark;
-    ctx.beginPath();
-    ctx.ellipse(p.x, p.y, 7, 5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, 7, 5, 0, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = C.cream;
-    ctx.beginPath();
-    ctx.ellipse(p.x, p.y - 1, 6.5, 4.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // toe beans
-    const beans = [-2.5, 0, 2.5];
-    beans.forEach(bx => {
+    ctx.beginPath(); ctx.ellipse(p.x, p.y-1, 6.5, 4.5, 0, 0, Math.PI*2); ctx.fill();
+    [-2.5,0,2.5].forEach(bx=>{
       ctx.fillStyle = C.pawPad;
-      ctx.beginPath();
-      ctx.arc(p.x + bx, p.y + 1.5, 1.3, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.beginPath(); ctx.arc(p.x+bx, p.y+1.5, 1.3, 0, Math.PI*2); ctx.fill();
     });
     ctx.fillStyle = C.pawPad;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y - 0.5, 2, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y-.5, 2, 0, Math.PI*2); ctx.fill();
   });
 }
 
-function drawThinkBubble(ctx, cx, cy, frame) {
-  const t = (frame * 0.04) % 1;
-  const bob = Math.sin(frame * 0.08) * 2;
-
-  // dots trail
-  [[cx+20, cy-18, 2.5],
-   [cx+26, cy-26, 3.5],
-   [cx+30, cy-36, 5]].forEach(([bx, by, br], i) => {
-    ctx.globalAlpha = 0.5 + i * 0.15;
-    ctx.fillStyle = C.thinkBubble;
-    ctx.beginPath();
-    ctx.arc(bx, by + bob * (i * 0.3), br, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  // bubble
-  ctx.globalAlpha = 0.9;
-  ctx.fillStyle = C.thinkBubble;
-  ctx.beginPath();
-  ctx.arc(cx + 32, cy - 44 + bob, 12, 0, Math.PI * 2);
-  ctx.fill();
-
-  // dots inside bubble
-  ctx.fillStyle = C.eyeBlueDark;
-  ctx.globalAlpha = 0.6 + Math.sin(frame * 0.1) * 0.2;
-  for (let i = 0; i < 3; i++) {
-    ctx.beginPath();
-    ctx.arc(cx + 24 + i * 5, cy - 44 + bob, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.globalAlpha = 1;
-}
-
-function drawZzz(ctx, cx, cy, frame) {
-  const zs = ['z', 'z', 'Z'];
-  zs.forEach((z, i) => {
-    const age  = ((frame * 0.02 + i * 0.33) % 1);
-    const rise = age * 20;
-    const alpha = age < 0.7 ? age / 0.7 : (1 - age) / 0.3;
-    ctx.globalAlpha = alpha * 0.8;
-    ctx.fillStyle = C.zzzColor;
-    ctx.font = `bold ${8 + i * 3}px sans-serif`;
-    ctx.fillText(z, cx + 14 + i * 4 - rise * 0.3, cy - 10 - rise);
-  });
-  ctx.globalAlpha = 1;
-}
-
-function drawSparkles(ctx, cx, cy, frame) {
-  const sparks = [
-    { ox: -18, oy: -22, phase: 0     },
-    { ox:  20, oy: -18, phase: 0.5   },
-    { ox: -12, oy: -32, phase: 0.25  },
-    { ox:  14, oy: -30, phase: 0.75  },
-  ];
-  sparks.forEach(s => {
-    const a = (Math.sin(frame * 0.12 + s.phase * Math.PI * 2) + 1) * 0.5;
-    const size = 2 + a * 3;
-    ctx.globalAlpha = a * 0.9;
-
-    // 4-point star
-    ctx.fillStyle = s.phase < 0.5 ? C.sparkle : C.sparkle2;
-    ctx.save();
-    ctx.translate(cx + s.ox, cy + s.oy);
-    ctx.rotate(frame * 0.03 + s.phase);
-    ctx.beginPath();
-    for (let p = 0; p < 4; p++) {
-      const angle = (p / 4) * Math.PI * 2;
-      const r = p % 2 === 0 ? size : size * 0.3;
-      ctx.lineTo(Math.cos(angle) * r, Math.sin(angle) * r);
-    }
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  });
-  ctx.globalAlpha = 1;
-}
-
-// ─── main draw function ───────────────────────────────────────────────────────
-
-/**
- * @param {CanvasRenderingContext2D} ctx
- * @param {object} opts
- *   state     {string}  — animation state
- *   frame     {number}  — incrementing frame counter
- *   eyeTarget {x,y}     — canvas-space coords for eye tracking (optional)
- *   scale     {number}  — uniform scale (default 1, designed for 64x64 canvas)
- *   blink     {number}  — 0..1 blink progress (manage externally or auto)
- */
-export function drawMochi(ctx, { state='idle', frame=0, eyeTarget=null, scale=1, blink=0 }) {
+export function drawMochi(ctx, { state='idle', frame=0, eyeTarget=null, scale=1, blink=0, colors }) {
   const W = ctx.canvas.width;
   const H = ctx.canvas.height;
   ctx.clearRect(0, 0, W, H);
@@ -460,10 +379,10 @@ export function drawMochi(ctx, { state='idle', frame=0, eyeTarget=null, scale=1,
   ctx.save();
   ctx.scale(scale, scale);
 
+  const pal = { ...C, ...colors };
   const cx = (W / scale) / 2;
   const cy = (H / scale) / 2 + 4;
 
-  // ── per-state motion values ──────────────────────────────────────────────
   let bodyBobY   = 0;
   let bodyBobX   = 0;
   let bodyScaleX = 1;
@@ -478,6 +397,8 @@ export function drawMochi(ctx, { state='idle', frame=0, eyeTarget=null, scale=1,
   let headTiltY  = 0;
   let happyMouth = false;
   let whiskerTwitch = 0;
+  let useStretchBody = false;
+  let usePawsUp = false;
 
   switch (state) {
     case 'idle': {
@@ -576,54 +497,106 @@ export function drawMochi(ctx, { state='idle', frame=0, eyeTarget=null, scale=1,
       earPerk    = 0.4;
       break;
     }
+    case 'stretch': {
+      useStretchBody = true;
+      usePawsUp = true;
+      tailAngle = -0.2;
+      tailWag = sin(frame, 0.05, 0.2);
+      earPerk = 1;
+      break;
+    }
+    case 'overheat': {
+      bodyBobY = Math.abs(sin(frame, 0.2, 2));
+      headTiltX = sin(frame, 0.15, 1);
+      earPerk = 0.8;
+      tailWag = sin(frame, 0.15, 0.6);
+      happyMouth = false;
+      whiskerTwitch = 1;
+      bodyScaleX = 1.02;
+      bodyScaleY = 0.98;
+      break;
+    }
+    case 'jump': {
+      const t = (frame % 50) / 50;
+      if (t < 0.15) {
+        bodyBobY = lerp(0, -15, t / 0.15);
+        bodyScaleY = lerp(1, 0.85, t / 0.15);
+      } else if (t < 0.5) {
+        bodyBobY = lerp(-15, -22, (t - 0.15) / 0.35);
+        bodyScaleY = lerp(0.85, 1.1, (t - 0.15) / 0.35);
+      } else if (t < 0.8) {
+        bodyBobY = lerp(-22, -5, (t - 0.5) / 0.3);
+        bodyScaleY = lerp(1.1, 1, (t - 0.5) / 0.3);
+      } else {
+        bodyBobY = lerp(-5, 0, (t - 0.8) / 0.2);
+      }
+      pawBounce = bodyBobY * 0.3;
+      earPerk = 1;
+      happyMouth = true;
+      tailWag = 1;
+      tailAngle = 0.3;
+      break;
+    }
+    case 'purr': {
+      bodyBobY = sin(frame, 0.4, 0.5);
+      bodyBobX = sin(frame, 0.35, 0.3);
+      earPerk = 0.6 + sin(frame, 0.3, 0.15);
+      tailWag = sin(frame, 0.3, 0.4);
+      happyMouth = true;
+      break;
+    }
+    case 'paper': {
+      bodyBobY = sin(frame, 0.04, 1);
+      earPerk = 0.5;
+      tailWag = sin(frame, 0.06, 0.3);
+      headTiltX = -3;
+      break;
+    }
   }
 
   const bx = cx + bodyBobX + headTiltX;
   const by = cy + bodyBobY + headTiltY;
 
-  // ── draw order ────────────────────────────────────────────────────────────
-
-  // 1. drop shadow
   drawShadow(ctx, cx, cy + 18, 18 * bodyScaleX, 5);
 
-  // 2. tail (behind body)
-  drawTail(ctx, bx - 18, by + 8, tailAngle, tailWag);
+  drawTail(ctx, bx - 18, by + 8, tailAngle, tailWag, pal);
 
-  // 3. body
-  drawBody(ctx, bx, by, bodyScaleX, bodyScaleY);
+  if (useStretchBody) {
+    drawBodyStretched(ctx, bx, by, frame);
+  } else {
+    drawBody(ctx, bx, by, bodyScaleX, bodyScaleY, pal);
+  }
 
-  // 4. ears
-  drawEar(ctx, bx - 12, by - 16, 1, earPerk);
-  drawEar(ctx, bx + 12, by - 16, -1, earPerk);
+  if (!useStretchBody) {
+    drawEar(ctx, bx - 12, by - 16, 1, earPerk, pal);
+    drawEar(ctx, bx + 12, by - 16, -1, earPerk, pal);
+  }
 
-  // 5. face elements
-  drawEyes(ctx, bx, by - 4, eyeTarget, blink, state, frame);
+  drawEyes(ctx, bx, by - 4, eyeTarget, blink, state, frame, pal);
   drawNose(ctx, bx, by + 4);
   drawMouth(ctx, bx, by + 8, happyMouth);
   drawWhiskers(ctx, bx, by + 5, whiskerTwitch);
 
-  // 6. paws (in front)
-  drawPaws(ctx, bx, by + 16, leftPawY, rightPawY, pawBounce);
+  if (usePawsUp) {
+    drawPawsUp(ctx, bx, by + 16, frame);
+  } else {
+    drawPaws(ctx, bx, by + 16, leftPawY, rightPawY, pawBounce);
+  }
 
-  // 7. state overlays
-  if (state === 'sleep') {
-    drawZzz(ctx, bx, by - 20, frame);
-  }
-  if (state === 'think') {
-    drawThinkBubble(ctx, bx, by - 20, frame);
-  }
-  if (state === 'happy' || state === 'excited') {
-    drawSparkles(ctx, bx, by, frame);
-  }
+  if (state === 'sleep') drawZzz(ctx, bx, by - 20, frame);
+  if (state === 'think') drawThinkBubble(ctx, bx, by - 20, frame);
+  if (state === 'happy' || state === 'excited') drawSparkles(ctx, bx, by, frame);
+  if (state === 'overheat') drawSteam(ctx, bx, by, frame);
+  if (state === 'purr') drawHearts(ctx, bx, by, frame);
+  if (state === 'paper') drawPaper(ctx, bx, by, frame);
 
   ctx.restore();
 }
 
-// ─── blink manager (optional helper) ─────────────────────────────────────────
 export function createBlinkManager() {
   let blinkFrame  = 0;
   let nextBlink   = 120 + Math.random() * 200;
-  let blinkPhase  = 0;  // 0=open, 1=closing, 2=opening
+  let blinkPhase  = 0;
 
   return function tick(frame) {
     if (frame >= nextBlink) {

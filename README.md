@@ -110,6 +110,20 @@ mochi/
 └── package.json
 ```
 
+## Controls
+
+| Input | Action |
+|-------|--------|
+| **P** key | Pet (purr) |
+| **Space** | Pet (purr) |
+| **Double-click** pet | Pet (purr) |
+| **Right-click** pet | Pet (purr) |
+| **Pet button** below canvas | Pet (purr) |
+| **W** key | Stretch (pomodoro break) |
+| **R** key | Celebrate (jump) |
+| **T** key | Think (AI thinking) |
+| **Drag** | Grab and move mochi anywhere |
+
 ## Avatars
 
 ### Cat
