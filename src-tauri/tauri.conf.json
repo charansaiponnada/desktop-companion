@@ -1,7 +1,7 @@
 {
   "productName": "companion",
   "version": "0.1.0",
-  "identifier": "com.companion.app",
+  "identifier": "com.companion.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
@@ -29,7 +29,14 @@
     }
   },
   "bundle": {
-  "active": false,
-  "icon": []
-}
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "wix": null,
+      "nsis": null
+    }
+  }
 }
